@@ -1,0 +1,122 @@
+#! /usr/bin/python
+
+# imports
+import cmd
+import subprocess
+
+
+class ManageFiler(cmd.Cmd):
+	"""
+	class the control command processor
+	"""
+
+	filerList = ["mucfs01", "mucfs02", "mucfs03"]
+	filer = ''
+	prompt = '%s > ' % filer
+
+	def do_listFilers(self, line):
+		"""
+		prints the list of all available filers.
+		use one these as an argument for selectFiler method
+		"""
+		for filer in self.filerList:
+			print "--\t %s" % filer
+
+
+	def do_selectFiler(self, line):
+		"""
+		select a filer to manage
+		"""	
+		if line in self.filerList:
+			self.filer = line
+			if self.checkFiler(self.filer) != 0:
+				print "filer not reachable"
+				return 1	
+			
+			self.prompt = '%s> ' % self.filer
+			self.cmdloop("%s selected" % self.filer)
+	
+	def complete_selectFiler(self, text, line, begidx, endidx):
+		if not text:
+			completions = self.filerList[:]
+		else:
+			completions = [ f 
+							for f in self.filerList 
+							if f.startswith(text) 
+						]
+		return completions
+	
+	def emptyline(self):
+		"""
+		to avoid repeat the last successful command by pressing enter key.	
+		"""
+		if self.lastcmd:
+			self.lastcmd = ""
+			return self.onecmd('\n')
+	
+	def checkFiler(self, filer):
+		"""
+		checks the availability of the given filer and returns True if is available
+		"""
+		command = 'ssh -qn admin@%s version' % self.filer
+		proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+		p_stdout = proc.communicate()[0]
+		print p_stdout.strip()
+		rc = proc.returncode
+		return rc
+	
+	def do_showAggregates(self, line):
+		"""
+		show aggregates in a sorted order
+		"""
+		command = 'ssh -qn admin@%s "set diagnostic; storage aggr show -aggregate aggr* -fields availsize,physical-used,\
+			percent-used,physical-used-percent,size,usedsize -sort-by percent-used"' % self.filer
+		proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+		p_stdout = proc.communicate()[0]
+		print p_stdout
+
+	def do_showVolumes(self, filer):
+		"""
+		connects to the selected filer and returns a volume list
+		"""
+		command = 'ssh -qn admin@%s vol show' % self.filer
+		proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+		p_stdout = proc.communicate()[0]
+		print p_stdout
+
+	def do_showVolumeMove(self, line):
+		"""
+		shows the currently moving volumes on the selected filer		
+		"""
+		command = 'ssh -qn admin@%s vol move show -fields replication-throughput,state,bytes-remaining,\
+			estimated-completion-time,actual-duration,estimated-remaining-duration,details,\
+			percent-complete' % self.filer
+		proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+		p_stdout = proc.communicate()[0]
+		print p_stdout
+
+	def do_showSpaceUtil(self, line):
+		"""
+		bla bla
+		"""
+		if not line:
+			print "usage: showVolumeUtil <volumeName>"
+		else:
+			volume = line
+			command = 'ssh -qn admin@%s vol show %s -fields vserver,volume,available, \
+				size, used,percent-used, dedupe-space-saved, dedupe-space-saved-percent, compression-space-saved, \
+				compression-space-saved' % (self.filer, volume)
+			proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+			p_stdout = proc.communicate()[0]
+			print p_stdout
+
+#	def do_exit(self):
+#		selection = raw_input("are you sure you want to exit(Y/N)")
+#		if selection.lower() == "Y":
+#			exit(1)
+
+
+if __name__ == '__main__':
+	print "type help to see possible commands"
+	ManageFiler().cmdloop()
+	ManageFiler().emtpyline()
